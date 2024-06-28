@@ -34,6 +34,28 @@ if(ENABLE_QT)
                AUTORCC ON)
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c)
+include(cmake/BuildAssimp.cmake)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE assimp)
+
+set(USE_SYSTEM_OPENCV
+    OFF
+    CACHE STRING "Use system OpenCV")
+if(USE_SYSTEM_OPENCV)
+  if(OS_LINUX)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE "${OpenCV_LIBRARIES}")
+    target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM PUBLIC "${OpenCV_INCLUDE_DIRS}")
+  else()
+    message(FATAL_ERROR "System OpenCV is only supported on Linux!")
+  endif()
+else()
+  include(cmake/FetchOpenCV.cmake)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenCV)
+endif()
+
+target_sources(
+  ${CMAKE_PROJECT_NAME}
+  PRIVATE src/plugin-main.c src/augmented-filter.c src/augmented-filter.cpp src/asset-utils/asset-loader.cpp
+          src/asset-utils/asset-render.cpp src/obs-utils/obs-utils.cpp)
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
