@@ -5,11 +5,7 @@ jobs:
   clang-format:
     runs-on: ubuntu-22.04
     steps:
-<<<<<<< HEAD
-      - uses: actions/checkout@v3
-=======
       - uses: actions/checkout@v4
->>>>>>> template-repo/master
         with:
           fetch-depth: 0
       - name: clang-format check 🐉
@@ -21,11 +17,7 @@ jobs:
   cmake-format:
     runs-on: ubuntu-22.04
     steps:
-<<<<<<< HEAD
-      - uses: actions/checkout@v3
-=======
       - uses: actions/checkout@v4
->>>>>>> template-repo/master
         with:
           fetch-depth: 0
       - name: cmake-format check 🎛️
