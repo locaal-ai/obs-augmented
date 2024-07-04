@@ -20,8 +20,12 @@ struct augmented_filter_data {
 	obs_source_t *source;
 	gs_texrender_t *texrender;
 	gs_stagesurf_t *stagesurface;
+	gs_effect_t *effect;
+	gs_vertbuffer_t *vbo;
 
 	const aiScene *asset;
+	aiMatrix4x4 modelMatrix;
+	float fov;
 
 	cv::Mat inputBGRA;
 	cv::Mat outputPreviewBGRA;

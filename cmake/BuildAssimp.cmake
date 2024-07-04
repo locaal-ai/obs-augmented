@@ -20,7 +20,7 @@ ExternalProject_Add(
              -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=ON
              -DASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT=OFF
              -DASSIMP_INSTALL_PDB=OFF
-             -DASSIMP_NO_EXPORT=ON)
+             -DASSIMP_NO_EXPORT=OFF)
 
 ExternalProject_Get_Property(assimp-build INSTALL_DIR)
 
