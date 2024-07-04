@@ -9,8 +9,9 @@
 
 void augmented_filter_activate(void *data) {}
 
-void update_from_settings(augmented_filter_data *afd, obs_data_t *s) {
-	
+void update_from_settings(augmented_filter_data *afd, obs_data_t *s)
+{
+
 	// get the rotation value
 	float rotation = (float)obs_data_get_double(s, "rotation");
 	// conver to radians
@@ -25,6 +26,13 @@ void update_from_settings(augmented_filter_data *afd, obs_data_t *s) {
 	float scale = (float)obs_data_get_double(s, "scale");
 
 	afd->fov = (float)obs_data_get_double(s, "fov") * (M_PI / 180.0f);
+	afd->autoRotate = obs_data_get_bool(s, "auto_rotate");
+	afd->depthFunction = (int)obs_data_get_int(s, "depth_function");
+	afd->cullMode = (int)obs_data_get_int(s, "cull_mode");
+	afd->depthTest = obs_data_get_bool(s, "depth_test");
+	afd->stencilTest = obs_data_get_bool(s, "stencil_test");
+	afd->stencilWrite = obs_data_get_bool(s, "stencil_write");
+	afd->stencilFunction = (int)obs_data_get_int(s, "stencil_function");
 
 	// update the model matrix
 	afd->modelMatrix = aiMatrix4x4();
@@ -61,7 +69,8 @@ void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
 	// load the effect
 	char *effectPathPtr = obs_module_file("effects/draw3d.effect");
 	if (!effectPathPtr) {
-		obs_log(LOG_ERROR, "Failed to get effect path: effects/draw3d.effect");
+		obs_log(LOG_ERROR,
+			"Failed to get effect path: effects/draw3d.effect");
 		afd->isDisabled = true;
 		return afd;
 	}
@@ -70,7 +79,8 @@ void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
 	afd->effect = gs_effect_create_from_file(effectPathPtr, nullptr);
 	bfree(effectPathPtr);
 	if (!afd->effect) {
-		obs_log(LOG_ERROR, "Failed to load effect: effects/draw3d.effect");
+		obs_log(LOG_ERROR,
+			"Failed to load effect: effects/draw3d.effect");
 		afd->isDisabled = true;
 		return afd;
 	}
@@ -88,7 +98,8 @@ void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
 	return afd;
 }
 
-void augmented_filter_update(void *data, obs_data_t *s) {
+void augmented_filter_update(void *data, obs_data_t *s)
+{
 	struct augmented_filter_data *afd =
 		reinterpret_cast<augmented_filter_data *>(data);
 
@@ -132,13 +143,21 @@ const char *augmented_filter_name(void *unused)
 
 void augmented_filter_deactivate(void *data) {}
 
-void augmented_filter_defaults(obs_data_t *s) {
+void augmented_filter_defaults(obs_data_t *s)
+{
 	obs_data_set_default_double(s, "rotation", 0.0);
 	obs_data_set_default_double(s, "x", 0.0);
 	obs_data_set_default_double(s, "y", 0.0);
 	obs_data_set_default_double(s, "z", 0.0);
 	obs_data_set_default_double(s, "scale", 1.0);
 	obs_data_set_default_double(s, "fov", 60.0);
+	obs_data_set_default_bool(s, "auto_rotate", true);
+	obs_data_set_default_int(s, "depth_function", GS_LEQUAL);
+	obs_data_set_default_int(s, "cull_mode", GS_BACK);
+	obs_data_set_default_bool(s, "depth_test", true);
+	obs_data_set_default_bool(s, "stencil_test", false);
+	obs_data_set_default_bool(s, "stencil_write", false);
+	obs_data_set_default_int(s, "stencil_function", GS_STENCIL_BOTH);
 }
 
 obs_properties_t *augmented_filter_properties(void *data)
@@ -146,18 +165,59 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_properties_t *props = obs_properties_create();
 
 	// add slider for rotation
-	obs_properties_add_float_slider(props, "rotation", "Rotation", -180.0, 180.0,
-					 0.1);
+	obs_properties_add_float_slider(props, "rotation", "Rotation", -180.0,
+					180.0, 0.1);
 	// add slider for x position
-	obs_properties_add_float_slider(props, "x", "X Position", -5.0, 5.0, 0.01);
+	obs_properties_add_float_slider(props, "x", "X Position", -5.0, 5.0,
+					0.01);
 	// add slider for y position
-	obs_properties_add_float_slider(props, "y", "Y Position", -5.0, 5.0, 0.01);
+	obs_properties_add_float_slider(props, "y", "Y Position", -5.0, 5.0,
+					0.01);
 	// add slider for z position
-	obs_properties_add_float_slider(props, "z", "Z Position", -5.0, 5.0, 0.01);
+	obs_properties_add_float_slider(props, "z", "Z Position", -5.0, 5.0,
+					0.01);
 	// add slider for scale
-	obs_properties_add_float_slider(props, "scale", "Scale", 0.0, 2.0, 0.01);
+	obs_properties_add_float_slider(props, "scale", "Scale", 0.0, 2.0,
+					0.01);
 	// add slider for field of view angle
-	obs_properties_add_float_slider(props, "fov", "Field of View", 0.0, 180.0, 0.1);
+	obs_properties_add_float_slider(props, "fov", "Field of View", 0.0,
+					180.0, 0.1);
+	// add a checkbox for auto rotate
+	obs_properties_add_bool(props, "auto_rotate", "Auto Rotate");
+	// add a selection for gs_depth_function
+	obs_property_t *list = obs_properties_add_list(props, "depth_function",
+						       "Depth Function",
+						       OBS_COMBO_TYPE_LIST,
+						       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Never", GS_NEVER);
+	obs_property_list_add_int(list, "Less", GS_LESS);
+	obs_property_list_add_int(list, "Equal", GS_EQUAL);
+	obs_property_list_add_int(list, "LessEqual", GS_LEQUAL);
+	obs_property_list_add_int(list, "Greater", GS_GREATER);
+	obs_property_list_add_int(list, "NotEqual", GS_NOTEQUAL);
+	obs_property_list_add_int(list, "GreaterEqual", GS_GEQUAL);
+	obs_property_list_add_int(list, "Always", GS_ALWAYS);
+	// add a selection for gs_set_cull_mode
+	list = obs_properties_add_list(props, "cull_mode", "Cull Mode",
+				       OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "None", GS_NEITHER);
+	obs_property_list_add_int(list, "Front", GS_FRONT);
+	obs_property_list_add_int(list, "Back", GS_BACK);
+	// add checkbos for depth test
+	obs_properties_add_bool(props, "depth_test", "Depth Test");
+	// add checkbos for stencil test
+	obs_properties_add_bool(props, "stencil_test", "Stencil Test");
+	// add checkbos for stencil write
+	obs_properties_add_bool(props, "stencil_write", "Stencil Write");
+	// add a selection for gs_stencil_function
+	list = obs_properties_add_list(props, "stencil_function",
+				       "Stencil Function", OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Both", GS_STENCIL_BOTH);
+	obs_property_list_add_int(list, "Front", GS_STENCIL_FRONT);
+	obs_property_list_add_int(list, "Back", GS_STENCIL_BACK);
+
 	return props;
 }
 
@@ -167,12 +227,17 @@ void augmented_filter_show(void *data) {}
 
 void augmented_filter_hide(void *data) {}
 
-void augmented_filter_video_tick(void *data, float seconds) {
+void augmented_filter_video_tick(void *data, float seconds)
+{
 	// update the rotation based on the time
 	struct augmented_filter_data *afd =
 		reinterpret_cast<augmented_filter_data *>(data);
 
 	if (afd->isDisabled) {
+		return;
+	}
+
+	if (!afd->autoRotate) {
 		return;
 	}
 
@@ -211,7 +276,6 @@ void augmented_filter_video_render(void *data, gs_effect_t *_effect)
 	gs_texture_t *tex = gs_texrender_get_texture(afd->texrender);
 	if (!tex)
 		return;
-
 
 	gs_blend_state_push();
 	gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);

@@ -90,7 +90,7 @@ float4 PSDrawBare(PixelInput input) : TARGET
     float lightIntensity = max(dot(normal, -normalize(input.LightDir)), 0.0f);
 
     // Return the final color (example: simple white color modulated by light intensity)
-    return float4(input.Color * LightColor * lightIntensity, 1.0f);
+    return float4(input.Color * LightColor * lightIntensity + float3(0.1, 0.1, 0.1), 1.0f);
 }
 
 technique Draw

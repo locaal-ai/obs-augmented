@@ -26,6 +26,13 @@ struct augmented_filter_data {
 	const aiScene *asset;
 	aiMatrix4x4 modelMatrix;
 	float fov;
+	bool autoRotate;
+	int depthFunction;
+	int cullMode;
+	bool depthTest;
+	bool stencilTest;
+	bool stencilWrite;
+	int stencilFunction;
 
 	cv::Mat inputBGRA;
 	cv::Mat outputPreviewBGRA;

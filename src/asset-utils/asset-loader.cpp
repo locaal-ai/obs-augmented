@@ -9,67 +9,64 @@
 #include "plugin-support.h"
 
 // Function to calculate the bounding box of the scene
-void calculateBoundingBox(const aiScene* scene, aiVector3D& min, aiVector3D& max)
+void calculateBoundingBox(const aiScene *scene, aiVector3D &min,
+			  aiVector3D &max)
 {
-    min = aiVector3D(1e10f, 1e10f, 1e10f);
-    max = aiVector3D(-1e10f, -1e10f, -1e10f);
+	min = aiVector3D(1e10f, 1e10f, 1e10f);
+	max = aiVector3D(-1e10f, -1e10f, -1e10f);
 
-    for (unsigned int i = 0; i < scene->mNumMeshes; ++i)
-    {
-        const aiMesh* mesh = scene->mMeshes[i];
-        for (unsigned int j = 0; j < mesh->mNumVertices; ++j)
-        {
-            const aiVector3D& vertex = mesh->mVertices[j];
-            min.x = std::min(min.x, vertex.x);
-            min.y = std::min(min.y, vertex.y);
-            min.z = std::min(min.z, vertex.z);
-            max.x = std::max(max.x, vertex.x);
-            max.y = std::max(max.y, vertex.y);
-            max.z = std::max(max.z, vertex.z);
-        }
-    }
+	for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
+		const aiMesh *mesh = scene->mMeshes[i];
+		for (unsigned int j = 0; j < mesh->mNumVertices; ++j) {
+			const aiVector3D &vertex = mesh->mVertices[j];
+			min.x = std::min(min.x, vertex.x);
+			min.y = std::min(min.y, vertex.y);
+			min.z = std::min(min.z, vertex.z);
+			max.x = std::max(max.x, vertex.x);
+			max.y = std::max(max.y, vertex.y);
+			max.z = std::max(max.z, vertex.z);
+		}
+	}
 
-	obs_log(LOG_INFO, "Bounding box min: (%f, %f, %f)", min.x, min.y, min.z);
-	obs_log(LOG_INFO, "Bounding box max: (%f, %f, %f)", max.x, max.y, max.z);
+	obs_log(LOG_INFO, "Bounding box min: (%f, %f, %f)", min.x, min.y,
+		min.z);
+	obs_log(LOG_INFO, "Bounding box max: (%f, %f, %f)", max.x, max.y,
+		max.z);
 }
 
 // Function to rescale the scene to fit within a normalized size
-void rescaleScene(aiScene* scene)
+void rescaleScene(aiScene *scene)
 {
-    aiVector3D min, max;
-    calculateBoundingBox(scene, min, max);
+	aiVector3D min, max;
+	calculateBoundingBox(scene, min, max);
 
-    // Calculate the size of the bounding box
-    aiVector3D size = max - min;
-    float maxDimension = std::max(size.x, std::max(size.y, size.z));
+	// Calculate the size of the bounding box
+	aiVector3D size = max - min;
+	float maxDimension = std::max(size.x, std::max(size.y, size.z));
 
-    // Calculate the scaling factor to normalize the size
-    float scaleFactor = 1.0f / maxDimension;
+	// Calculate the scaling factor to normalize the size
+	float scaleFactor = 1.0f / maxDimension;
 
-    // Apply the scaling transformation to all vertices
-    for (unsigned int i = 0; i < scene->mNumMeshes; ++i)
-    {
-        aiMesh* mesh = scene->mMeshes[i];
-        for (unsigned int j = 0; j < mesh->mNumVertices; ++j)
-        {
-            mesh->mVertices[j] *= scaleFactor;
-        }
-    }
+	// Apply the scaling transformation to all vertices
+	for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
+		aiMesh *mesh = scene->mMeshes[i];
+		for (unsigned int j = 0; j < mesh->mNumVertices; ++j) {
+			mesh->mVertices[j] *= scaleFactor;
+		}
+	}
 
 	calculateBoundingBox(scene, min, max);
 }
 
-void adjustVertexOrder(aiMesh* mesh)
+void adjustVertexOrder(aiMesh *mesh)
 {
-    for (unsigned int i = 0; i < mesh->mNumFaces; ++i)
-    {
-        aiFace& face = mesh->mFaces[i];
-        if (face.mNumIndices == 3)
-        {
-            // Swap the order of the second and third vertices
-            std::swap(face.mIndices[1], face.mIndices[2]);
-        }
-    }
+	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+		aiFace &face = mesh->mFaces[i];
+		if (face.mNumIndices == 3) {
+			// Swap the order of the second and third vertices
+			std::swap(face.mIndices[1], face.mIndices[2]);
+		}
+	}
 }
 
 const aiScene *load_asset(const char *path)
