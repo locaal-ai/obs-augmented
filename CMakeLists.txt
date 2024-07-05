@@ -53,9 +53,12 @@ else()
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenCV)
 endif()
 
+include(cmake/BuildGlm.cmake)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE glm)
+
 target_sources(
   ${CMAKE_PROJECT_NAME}
   PRIVATE src/plugin-main.c src/augmented-filter.c src/augmented-filter.cpp src/asset-utils/asset-loader.cpp
-          src/asset-utils/asset-render.cpp src/obs-utils/obs-utils.cpp)
+          src/asset-utils/asset-render.cpp src/obs-utils/obs-utils.cpp src/asset-utils/render-utils.cpp)
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

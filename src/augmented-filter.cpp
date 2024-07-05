@@ -1,31 +1,59 @@
 #include <obs.h>
 #include <assimp/cimport.h>
+#include <graphics/graphics.h>
+#include <graphics/matrix4.h>
 
 #include "augmented-filter.h"
 #include "augmented-filter-data.h"
 #include "plugin-support.h"
 #include "asset-utils/asset-loader.h"
 #include "asset-utils/asset-render.h"
+#include "asset-utils/render-utils.h"
 
 void augmented_filter_activate(void *data) {}
 
+void build_projection_matrix(augmented_filter_data *afd)
+{
+	const float aspectRatio =
+		(float)afd->source_width / (float)afd->source_height;
+	afd->projectionMatrix =
+		createProjectionMatrix(afd->fov, aspectRatio, 0.1f, 100.0f);
+}
+
 void update_from_settings(augmented_filter_data *afd, obs_data_t *s)
 {
+	// get file path of the built in asset
+	const char *assetPathFromSettings = obs_data_get_string(s, "asset");
+	if (afd->assetPath != assetPathFromSettings) {
+		afd->assetPath = assetPathFromSettings;
+		char *assetPath = obs_module_file(assetPathFromSettings);
+		if (!assetPath) {
+			obs_log(LOG_ERROR, "Failed to get asset path");
+			afd->isDisabled = true;
+			return;
+		}
+		afd->asset = load_asset(assetPath);
+		bfree(assetPath);
+		if (!afd->asset) {
+			obs_log(LOG_ERROR, "Failed to load asset: %s",
+				assetPath);
+			afd->isDisabled = true;
+			return;
+		}
+	}
 
 	// get the rotation value
-	float rotation = (float)obs_data_get_double(s, "rotation");
-	// conver to radians
-	rotation = (rotation * M_PI) / 180.0f;
+	const float rotation = (float)obs_data_get_double(s, "rotation");
 	// get the x position value
-	float x = (float)obs_data_get_double(s, "x");
+	const float x = (float)obs_data_get_double(s, "x");
 	// get the y position value
-	float y = (float)obs_data_get_double(s, "y");
+	const float y = (float)obs_data_get_double(s, "y");
 	// get the z position value
-	float z = (float)obs_data_get_double(s, "z");
+	const float z = (float)obs_data_get_double(s, "z");
 	// get the scale value
-	float scale = (float)obs_data_get_double(s, "scale");
+	const float scale = (float)obs_data_get_double(s, "scale");
 
-	afd->fov = (float)obs_data_get_double(s, "fov") * (M_PI / 180.0f);
+	float new_fov = (float)obs_data_get_double(s, "fov") * (M_PI / 180.0f);
 	afd->autoRotate = obs_data_get_bool(s, "auto_rotate");
 	afd->depthFunction = (int)obs_data_get_int(s, "depth_function");
 	afd->cullMode = (int)obs_data_get_int(s, "cull_mode");
@@ -33,24 +61,45 @@ void update_from_settings(augmented_filter_data *afd, obs_data_t *s)
 	afd->stencilTest = obs_data_get_bool(s, "stencil_test");
 	afd->stencilWrite = obs_data_get_bool(s, "stencil_write");
 	afd->stencilFunction = (int)obs_data_get_int(s, "stencil_function");
+	afd->stencilDepthFunction =
+		(int)obs_data_get_int(s, "stencil_function_depth_test");
+	afd->stencilOpSide = (int)obs_data_get_int(s, "stencil_op_side");
+	afd->stencilOpFail = (int)obs_data_get_int(s, "stencil_op_fail");
+	afd->stencilOpDepthFail = (int)obs_data_get_int(s, "stencil_op_z_fail");
+	afd->stencilOpPass = (int)obs_data_get_int(s, "stencil_op_pass");
+	afd->stencilClear = (int)obs_data_get_int(s, "stencil_clear");
 
-	// update the model matrix
-	afd->modelMatrix = aiMatrix4x4();
-	afd->modelMatrix.a1 = scale;
-	afd->modelMatrix.b2 = scale;
-	afd->modelMatrix.c3 = scale;
-	afd->modelMatrix.a4 = x;
-	afd->modelMatrix.b4 = y;
-	afd->modelMatrix.c4 = z;
+	afd->clearMode = (int)obs_data_get_int(s, "clear_mode");
+	afd->depthClear = (float)obs_data_get_double(s, "depth_clear");
+	afd->depthFactor = (float)obs_data_get_double(s, "depth_factor");
+	afd->depthBias = (float)obs_data_get_double(s, "depth_bias");
 
-	// update the rotation matrix
-	aiMatrix4x4 rotationMatrix;
-	rotationMatrix.a1 = cos(rotation);
-	rotationMatrix.a3 = sin(rotation);
-	rotationMatrix.c1 = -sin(rotation);
-	rotationMatrix.c3 = cos(rotation);
+	afd->modelMatrix = createModelMatrix({x, y, z}, {0.0f, rotation, 0.0f},
+					     {scale, scale, scale});
 
-	afd->modelMatrix = afd->modelMatrix * rotationMatrix;
+	const vec3 eye = {0.0f, 2.0f, 5.0f};
+	const vec3 target_v = {0.0f, 0.0f, 0.0f};
+	const vec3 up = {0.0f, 1.0f, 0.0f};
+
+	afd->viewMatrix = createViewMatrix(eye, target_v, up);
+	afd->normalMatrix = calcNormalMatrix(afd->modelMatrix);
+
+	if (new_fov != afd->fov) {
+		afd->fov = new_fov;
+		build_projection_matrix(afd);
+	}
+
+	// update the world view projection matrix
+	matrix4_mul(&afd->worldViewProjMatrix, &afd->projectionMatrix,
+		    &afd->viewMatrix);
+	matrix4_mul(&afd->worldViewProjMatrix, &afd->worldViewProjMatrix,
+		    &afd->modelMatrix);
+
+	// get the light position
+	const float light_x = (float)obs_data_get_double(s, "light_x");
+	const float light_y = (float)obs_data_get_double(s, "light_y");
+	const float light_z = (float)obs_data_get_double(s, "light_z");
+	afd->lightPosition = {light_x, light_y, light_z};
 }
 
 void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
@@ -61,10 +110,6 @@ void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
 
 	afd->source = filter;
 	afd->texrender = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
-
-	// get file path of the built in asset
-	const char *assetPath = obs_module_file("assets/ghost.dae");
-	afd->asset = load_asset(assetPath);
 
 	// load the effect
 	char *effectPathPtr = obs_module_file("effects/draw3d.effect");
@@ -84,12 +129,6 @@ void *augmented_filter_create(obs_data_t *settings, obs_source_t *filter)
 		afd->isDisabled = true;
 		return afd;
 	}
-
-	gs_render_start(true);
-	for (unsigned int i = 0; i < afd->asset->mNumMeshes; ++i) {
-		drawAssimpMesh(afd->asset->mMeshes[i]);
-	}
-	afd->vbo = gs_render_save();
 
 	obs_leave_graphics();
 
@@ -125,7 +164,7 @@ void augmented_filter_destroy(void *data)
 		}
 
 		obs_enter_graphics();
-		gs_vertexbuffer_destroy(afd->vbo);
+		// gs_vertexbuffer_destroy(afd->vbo);
 		gs_texrender_destroy(afd->texrender);
 		if (afd->stagesurface) {
 			gs_stagesurface_destroy(afd->stagesurface);
@@ -145,6 +184,7 @@ void augmented_filter_deactivate(void *data) {}
 
 void augmented_filter_defaults(obs_data_t *s)
 {
+	obs_data_set_default_string(s, "asset", "assets/crown.dae");
 	obs_data_set_default_double(s, "rotation", 0.0);
 	obs_data_set_default_double(s, "x", 0.0);
 	obs_data_set_default_double(s, "y", 0.0);
@@ -152,17 +192,38 @@ void augmented_filter_defaults(obs_data_t *s)
 	obs_data_set_default_double(s, "scale", 1.0);
 	obs_data_set_default_double(s, "fov", 60.0);
 	obs_data_set_default_bool(s, "auto_rotate", true);
+	obs_data_set_default_double(s, "light_x", 0.0);
+	obs_data_set_default_double(s, "light_y", 0.0);
+	obs_data_set_default_double(s, "light_z", 1.0);
 	obs_data_set_default_int(s, "depth_function", GS_LEQUAL);
 	obs_data_set_default_int(s, "cull_mode", GS_BACK);
 	obs_data_set_default_bool(s, "depth_test", true);
 	obs_data_set_default_bool(s, "stencil_test", false);
 	obs_data_set_default_bool(s, "stencil_write", false);
 	obs_data_set_default_int(s, "stencil_function", GS_STENCIL_BOTH);
+	obs_data_set_default_int(s, "stencil_function_depth_test", GS_LEQUAL);
+	obs_data_set_default_int(s, "stencil_op_side", GS_STENCIL_BOTH);
+	obs_data_set_default_int(s, "stencil_op_fail", GS_KEEP);
+	obs_data_set_default_int(s, "stencil_op_z_fail", GS_KEEP);
+	obs_data_set_default_int(s, "stencil_op_pass", GS_KEEP);
+	obs_data_set_default_int(s, "stencil_clear", 0);
+	obs_data_set_default_int(s, "clear_mode",
+				 GS_CLEAR_COLOR | GS_CLEAR_DEPTH);
+	obs_data_set_default_double(s, "depth_clear", 0.0);
+	obs_data_set_default_double(s, "depth_factor", 1.0);
+	obs_data_set_default_double(s, "depth_bias", 0.0);
 }
 
 obs_properties_t *augmented_filter_properties(void *data)
 {
 	obs_properties_t *props = obs_properties_create();
+
+	// add asset selection combo box
+	obs_property_t *asset_list = obs_properties_add_list(
+		props, "asset", "Asset", OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(asset_list, "Crown", "assets/crown.dae");
+	obs_property_list_add_string(asset_list, "Ghost", "assets/ghost.dae");
 
 	// add slider for rotation
 	obs_properties_add_float_slider(props, "rotation", "Rotation", -180.0,
@@ -184,6 +245,17 @@ obs_properties_t *augmented_filter_properties(void *data)
 					180.0, 0.1);
 	// add a checkbox for auto rotate
 	obs_properties_add_bool(props, "auto_rotate", "Auto Rotate");
+
+	// add a slider for light position x
+	obs_properties_add_float_slider(props, "light_x", "Light X", -5.0, 5.0,
+					0.01);
+	// add a slider for light position y
+	obs_properties_add_float_slider(props, "light_y", "Light Y", -5.0, 5.0,
+					0.01);
+	// add a slider for light position z
+	obs_properties_add_float_slider(props, "light_z", "Light Z", -5.0, 5.0,
+					0.01);
+
 	// add a selection for gs_depth_function
 	obs_property_t *list = obs_properties_add_list(props, "depth_function",
 						       "Depth Function",
@@ -217,6 +289,85 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "Both", GS_STENCIL_BOTH);
 	obs_property_list_add_int(list, "Front", GS_STENCIL_FRONT);
 	obs_property_list_add_int(list, "Back", GS_STENCIL_BACK);
+	// add selectino for clear mode
+	list = obs_properties_add_list(props, "clear_mode", "Clear Mode",
+				       OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Color", GS_CLEAR_COLOR);
+	obs_property_list_add_int(list, "Depth", GS_CLEAR_DEPTH);
+	obs_property_list_add_int(list, "Stencil", GS_CLEAR_STENCIL);
+	obs_property_list_add_int(list, "Color and Depth",
+				  GS_CLEAR_COLOR | GS_CLEAR_DEPTH);
+	obs_property_list_add_int(list, "Color and Stencil",
+				  GS_CLEAR_COLOR | GS_CLEAR_STENCIL);
+	obs_property_list_add_int(list, "Depth and Stencil",
+				  GS_CLEAR_DEPTH | GS_CLEAR_STENCIL);
+	obs_property_list_add_int(list, "Color, Depth and Stencil",
+				  GS_CLEAR_COLOR | GS_CLEAR_DEPTH |
+					  GS_CLEAR_STENCIL);
+	// add selection for stencil function depth test
+	list = obs_properties_add_list(props, "stencil_function_depth_test",
+				       "Stencil Function", OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Never", GS_NEVER);
+	obs_property_list_add_int(list, "Less", GS_LESS);
+	obs_property_list_add_int(list, "Equal", GS_EQUAL);
+	obs_property_list_add_int(list, "LessEqual", GS_LEQUAL);
+	obs_property_list_add_int(list, "Greater", GS_GREATER);
+	obs_property_list_add_int(list, "NotEqual", GS_NOTEQUAL);
+	obs_property_list_add_int(list, "GreaterEqual", GS_GEQUAL);
+	obs_property_list_add_int(list, "Always", GS_ALWAYS);
+	// add selection for stencil op side
+	list = obs_properties_add_list(props, "stencil_op_side",
+				       "Stencil Op Side", OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Front", GS_STENCIL_FRONT);
+	obs_property_list_add_int(list, "Back", GS_STENCIL_BACK);
+	obs_property_list_add_int(list, "Both", GS_STENCIL_BOTH);
+	// add selection stencil op fail
+	list = obs_properties_add_list(props, "stencil_op_fail",
+				       "Stencil Op Fail", OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Keep", GS_KEEP);
+	obs_property_list_add_int(list, "Zero", GS_ZERO);
+	obs_property_list_add_int(list, "Replace", GS_REPLACE);
+	obs_property_list_add_int(list, "Increment", GS_INCR);
+	obs_property_list_add_int(list, "Decrement", GS_DECR);
+	obs_property_list_add_int(list, "Invert", GS_INVERT);
+	// add selection stencil op z fail
+	list = obs_properties_add_list(props, "stencil_op_z_fail",
+				       "Stencil Op Depth Fail",
+				       OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Keep", GS_KEEP);
+	obs_property_list_add_int(list, "Zero", GS_ZERO);
+	obs_property_list_add_int(list, "Replace", GS_REPLACE);
+	obs_property_list_add_int(list, "Increment", GS_INCR);
+	obs_property_list_add_int(list, "Decrement", GS_DECR);
+	obs_property_list_add_int(list, "Invert", GS_INVERT);
+	// add selection stencil op z fail
+	list = obs_properties_add_list(props, "stencil_op_pass",
+				       "Stencil Op Pass", OBS_COMBO_TYPE_LIST,
+				       OBS_COMBO_FORMAT_INT);
+	obs_property_list_add_int(list, "Keep", GS_KEEP);
+	obs_property_list_add_int(list, "Zero", GS_ZERO);
+	obs_property_list_add_int(list, "Replace", GS_REPLACE);
+	obs_property_list_add_int(list, "Increment", GS_INCR);
+	obs_property_list_add_int(list, "Decrement", GS_DECR);
+	obs_property_list_add_int(list, "Invert", GS_INVERT);
+	// add slider for stencil clear value
+	obs_properties_add_int_slider(props, "stencil_clear", "Stencil Clear",
+				      0, 255, 1);
+
+	// add slider for depth clear value
+	obs_properties_add_float_slider(props, "depth_clear", "Depth Clear",
+					-2.0, 2.0, 0.01);
+	// add slider for depth factor
+	obs_properties_add_float_slider(props, "depth_factor", "Depth Factor",
+					0.0, 10.0, 0.01);
+	// add slider for depth bias
+	obs_properties_add_float_slider(props, "depth_bias", "Depth Bias", -1.0,
+					1.0, 0.01);
 
 	return props;
 }
@@ -266,6 +417,15 @@ void augmented_filter_video_render(void *data, gs_effect_t *_effect)
 	if (!afd->asset) {
 		return;
 	}
+
+	if (afd->source_width == 0 || afd->source_height == 0) {
+		afd->source_width = obs_source_get_base_width(afd->source);
+		afd->source_height = obs_source_get_base_height(afd->source);
+		build_projection_matrix(afd);
+	}
+
+	gs_enable_depth_test(afd->depthTest);
+	gs_depth_function((gs_depth_test)afd->depthFunction);
 
 	render_asset_3d(afd);
 

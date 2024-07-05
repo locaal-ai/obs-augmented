@@ -2,8 +2,11 @@
 uniform float4x4 ViewProj;
 uniform float4x4 WorldViewProj;
 uniform float4x4 ModelMatrix;
+uniform float4x4 NormalMatrix;
 uniform float3 LightPosition;
 uniform float3 LightColor;
+uniform float depthFactor;
+uniform float depthBias;
 
 // sampler_state def_sampler {
 // 	Filter   = Linear;
@@ -20,42 +23,12 @@ struct VertIn {
 
 struct PixelInput
 {
-    float4 Position : SV_POSITION;
+    float4 Position : SV_Position;
     float3 Normal : NORMAL;
     float3 Color : COLOR;
     float3 LightDir: TEXCOORD0;
+    float3 PositionToo: TEXCOORD1;
 };
-
-// Helper function to compute the determinant of a 3x3 matrix
-float determinant3x3(float3x3 m)
-{
-    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
-           m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-}
-
-// Helper function to compute the adjugate of a 3x3 matrix
-float3x3 adjugate3x3(float3x3 m)
-{
-    float3x3 adj;
-    adj[0][0] = m[1][1] * m[2][2] - m[1][2] * m[2][1];
-    adj[0][1] = m[0][2] * m[2][1] - m[0][1] * m[2][2];
-    adj[0][2] = m[0][1] * m[1][2] - m[0][2] * m[1][1];
-    adj[1][0] = m[1][2] * m[2][0] - m[1][0] * m[2][2];
-    adj[1][1] = m[0][0] * m[2][2] - m[0][2] * m[2][0];
-    adj[1][2] = m[0][2] * m[1][0] - m[0][0] * m[1][2];
-    adj[2][0] = m[1][0] * m[2][1] - m[1][1] * m[2][0];
-    adj[2][1] = m[0][1] * m[2][0] - m[0][0] * m[2][1];
-    adj[2][2] = m[0][0] * m[1][1] - m[0][1] * m[1][0];
-    return adj;
-}
-
-// Function to compute the inverse of a 3x3 matrix
-float3x3 inverse3x3(float3x3 m)
-{
-    float det = determinant3x3(m);
-    return adjugate3x3(m) / det;
-}
 
 PixelInput VSDefault(VertIn input)
 {
@@ -63,18 +36,15 @@ PixelInput VSDefault(VertIn input)
     
     // Transform the position to world space and then to clip space
     float4 worldViewPosition = mul(float4(input.Position.xyz, 1.0f), WorldViewProj);
-    //worldViewPosition.z = worldViewPosition.z;
     output.Position = worldViewPosition;
+    output.PositionToo = worldViewPosition.xyz;
 
     float4 worldPosition = mul(float4(input.Position.xyz, 1.0f), ModelMatrix);
     float3 lightDir = worldPosition.xyz - LightPosition.xyz;
     output.LightDir = normalize( lightDir );
 
-    // Calculate the normal matrix (transpose of the inverse of the model matrix)
-    float3x3 normalMatrix = (float3x3)transpose(inverse3x3((float3x3)ModelMatrix));
-
     // Transform the normal
-    output.Normal = mul(normalMatrix, input.Normal);
+    output.Normal = normalize(mul(input.Normal, NormalMatrix));
 
     output.Color = input.Color;
 
@@ -85,6 +55,7 @@ float4 PSDrawBare(PixelInput input) : TARGET
 {
     // Normalize the transformed normal
     float3 normal = normalize(input.Normal);
+    //return float4(normal.x, normal.y, normal.z, 1.0f);
 
     // Calculate the lighting (simple diffuse lighting)
     float lightIntensity = max(dot(normal, -normalize(input.LightDir)), 0.0f);

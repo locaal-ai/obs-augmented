@@ -2,6 +2,8 @@
 #define FILTERDATA_H
 
 #include <obs.h>
+#include <graphics/vec3.h>
+#include <graphics/matrix4.h>
 
 #include <opencv2/core.hpp>
 
@@ -23,8 +25,14 @@ struct augmented_filter_data {
 	gs_effect_t *effect;
 	gs_vertbuffer_t *vbo;
 
+	std::string assetPath;
 	const aiScene *asset;
-	aiMatrix4x4 modelMatrix;
+	matrix4 modelMatrix;
+	matrix4 viewMatrix;
+	matrix4 worldViewProjMatrix;
+	matrix4 projectionMatrix;
+	matrix4 normalMatrix;
+	vec3 lightPosition;
 	float fov;
 	bool autoRotate;
 	int depthFunction;
@@ -33,6 +41,18 @@ struct augmented_filter_data {
 	bool stencilTest;
 	bool stencilWrite;
 	int stencilFunction;
+	int stencilDepthFunction;
+	int stencilOpSide;
+	int stencilOpFail;
+	int stencilOpDepthFail;
+	int stencilOpPass;
+	int stencilClear;
+	int clearMode;
+	float depthClear;
+	float depthFactor;
+	float depthBias;
+	int source_width = 0;
+	int source_height = 0;
 
 	cv::Mat inputBGRA;
 	cv::Mat outputPreviewBGRA;
