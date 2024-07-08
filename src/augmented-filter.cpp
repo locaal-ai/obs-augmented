@@ -224,6 +224,16 @@ obs_properties_t *augmented_filter_properties(void *data)
 		OBS_COMBO_FORMAT_STRING);
 	obs_property_list_add_string(asset_list, "Crown", "assets/crown.dae");
 	obs_property_list_add_string(asset_list, "Ghost", "assets/ghost.dae");
+	obs_property_list_add_string(asset_list, "Crown_02_v1dot4",
+				     "assets/Crown_02_v1dot4.dae");
+	obs_property_list_add_string(asset_list, "Crown_02_v1dot5",
+				     "assets/Crown_02_v1dot5.dae");
+	obs_property_list_add_string(asset_list, "Crown_03_v1dot4_PBRcol",
+				     "assets/Crown_03_v1dot4_PBRcol.dae");
+	obs_property_list_add_string(asset_list, "Crown_04_v1dot4_PBRref",
+				     "assets/Crown_04_v1dot4_PBRref.dae");
+	obs_property_list_add_string(asset_list, "Crown_05_blend",
+				     "assets/Crown_05_blend.dae");
 
 	// add slider for rotation
 	obs_properties_add_float_slider(props, "rotation", "Rotation", -180.0,
