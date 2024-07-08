@@ -5,7 +5,7 @@ set(ASSIMP_URL https://github.com/assimp/assimp/archive/refs/tags/v${ASSIMP_VERS
 if(WIN32)
   set(ASSIMP_SHARE_LIB_NAME assimp-vc143-mt)
 else()
-  set(ASSIMP_SHARE_LIB_NAME assimp)
+  set(ASSIMP_SHARE_LIB_NAME assimp.5.4.1)
 endif()
 
 ExternalProject_Add(

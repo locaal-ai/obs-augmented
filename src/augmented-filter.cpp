@@ -10,7 +10,10 @@
 #include "asset-utils/asset-render.h"
 #include "asset-utils/render-utils.h"
 
-void augmented_filter_activate(void *data) {}
+void augmented_filter_activate(void *data)
+{
+	UNUSED_PARAMETER(data);
+}
 
 void build_projection_matrix(augmented_filter_data *afd)
 {
@@ -177,10 +180,14 @@ void augmented_filter_destroy(void *data)
 
 const char *augmented_filter_name(void *unused)
 {
+	UNUSED_PARAMETER(unused);
 	return "Augmented Filter";
 }
 
-void augmented_filter_deactivate(void *data) {}
+void augmented_filter_deactivate(void *data)
+{
+	UNUSED_PARAMETER(data);
+}
 
 void augmented_filter_defaults(obs_data_t *s)
 {
@@ -216,6 +223,8 @@ void augmented_filter_defaults(obs_data_t *s)
 
 obs_properties_t *augmented_filter_properties(void *data)
 {
+	UNUSED_PARAMETER(data);
+
 	obs_properties_t *props = obs_properties_create();
 
 	// add asset selection combo box
@@ -382,11 +391,21 @@ obs_properties_t *augmented_filter_properties(void *data)
 	return props;
 }
 
-void augmented_filter_remove(void *data, obs_source_t *source) {}
+void augmented_filter_remove(void *data, obs_source_t *source)
+{
+	UNUSED_PARAMETER(data);
+	UNUSED_PARAMETER(source);
+}
 
-void augmented_filter_show(void *data) {}
+void augmented_filter_show(void *data)
+{
+	UNUSED_PARAMETER(data);
+}
 
-void augmented_filter_hide(void *data) {}
+void augmented_filter_hide(void *data)
+{
+	UNUSED_PARAMETER(data);
+}
 
 void augmented_filter_video_tick(void *data, float seconds)
 {
@@ -417,6 +436,8 @@ void augmented_filter_video_tick(void *data, float seconds)
 
 void augmented_filter_video_render(void *data, gs_effect_t *_effect)
 {
+	UNUSED_PARAMETER(_effect);
+
 	struct augmented_filter_data *afd =
 		reinterpret_cast<augmented_filter_data *>(data);
 
