@@ -56,7 +56,8 @@ void update_from_settings(augmented_filter_data *afd, obs_data_t *s)
 	// get the scale value
 	const float scale = (float)obs_data_get_double(s, "scale");
 
-	float new_fov = (float)obs_data_get_double(s, "fov") * (M_PI / 180.0f);
+	const float new_fov =
+		((float)obs_data_get_double(s, "fov")) * ((float)M_PI / 180.0f);
 	afd->autoRotate = obs_data_get_bool(s, "auto_rotate");
 	afd->depthFunction = (int)obs_data_get_int(s, "depth_function");
 	afd->cullMode = (int)obs_data_get_int(s, "cull_mode");
