@@ -1,0 +1,74 @@
+
+uniform float4x4 ViewProj;
+uniform float4x4 WorldViewProj;
+uniform float4x4 ModelMatrix;
+uniform float4x4 NormalMatrix;
+uniform float3 LightPosition;
+uniform float3 LightColor;
+uniform float depthFactor;
+uniform float depthBias;
+
+// sampler_state def_sampler {
+// 	Filter   = Linear;
+// 	AddressU = Clamp;
+// 	AddressV = Clamp;
+// };
+
+struct VertIn {
+	float4 Position : POSITION;
+    float3 Normal : NORMAL;
+	// float2 uv  : TEXCOORD0;
+    float3 Color : COLOR;
+};
+
+struct PixelInput
+{
+    float4 Position : SV_Position;
+    float3 Normal : NORMAL;
+    float3 Color : COLOR;
+    float3 LightDir: TEXCOORD0;
+    float3 PositionToo: TEXCOORD1;
+};
+
+PixelInput VSDefault(VertIn input)
+{
+    PixelInput output;
+    
+    // Transform the position to world space and then to clip space
+    float4 worldViewPosition = mul(float4(input.Position.xyz, 1.0f), WorldViewProj);
+    output.Position = worldViewPosition;
+    output.PositionToo = worldViewPosition.xyz;
+
+    float4 worldPosition = mul(float4(input.Position.xyz, 1.0f), ModelMatrix);
+    float3 lightDir = worldPosition.xyz - LightPosition.xyz;
+    output.LightDir = normalize( lightDir );
+
+    // Transform the normal
+    output.Normal = normalize(mul(input.Normal, NormalMatrix));
+
+    output.Color = input.Color;
+
+    return output;
+}
+
+float4 PSDrawBare(PixelInput input) : TARGET
+{
+    // Normalize the transformed normal
+    float3 normal = normalize(input.Normal);
+    //return float4(normal.x, normal.y, normal.z, 1.0f);
+
+    // Calculate the lighting (simple diffuse lighting)
+    float lightIntensity = max(dot(normal, -normalize(input.LightDir)), 0.0f);
+
+    // Return the final color (example: simple white color modulated by light intensity)
+    return float4(input.Color * LightColor * lightIntensity + float3(0.1, 0.1, 0.1), 1.0f);
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSDefault(input);
+		pixel_shader  = PSDrawBare(input);
+	}
+}

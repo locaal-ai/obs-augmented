@@ -1,13 +1,17 @@
 
 #include "asset-render.h"
 #include "augmented-filter-data.h"
+#include "plugin-support.h"
+#include "render-utils.h"
 
 #include <obs.h>
 #include <graphics/graphics.h>
+#include <graphics/matrix4.h>
+#include <util/platform.h>
 
 #include <assimp/scene.h>
 
-bool render_asset_3d(augmented_filter_data *afd, const aiScene *scene)
+bool render_asset_3d(augmented_filter_data *afd)
 {
 	obs_source_t *target = obs_filter_get_target(afd->source);
 	if (!target) {
@@ -19,47 +23,89 @@ bool render_asset_3d(augmented_filter_data *afd, const aiScene *scene)
 		return false;
 	}
 	gs_texrender_reset(afd->texrender);
-	gs_viewport_push();
-	gs_matrix_push();
-	gs_blend_state_push();
-	gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 	if (!gs_texrender_begin(afd->texrender, width, height)) {
 		return false;
 	}
-	struct vec4 background;
-	vec4_zero(&background);
-	gs_clear(GS_CLEAR_COLOR, &background, 0.0f, 0);
 
-	gs_perspective(120.0f, (float)width / (float)height,
-		       1.0f / (float)(1 << 22), (float)(1 << 22));
+	gs_begin_scene();
 
-	gs_vb_data *vb = gs_vbdata_create();
-	vb->points =
-		(vec3 *)bmalloc(sizeof(vec3) * scene->mMeshes[0]->mNumVertices);
-	vb->colors = (uint32_t *)bmalloc(sizeof(uint32_t) *
-					 scene->mMeshes[0]->mNumVertices);
-	vb->num = scene->mMeshes[0]->mNumVertices;
-	for (unsigned int i = 0; i < scene->mMeshes[0]->mNumVertices; i++) {
-		vb->points[i].x = scene->mMeshes[0]->mVertices[i].x;
-		vb->points[i].y = scene->mMeshes[0]->mVertices[i].y;
-		vb->points[i].z = scene->mMeshes[0]->mVertices[i].z;
-		vb->colors[i] = 0xFFFFFFFF;
-	}
-	gs_vertbuffer_t *vbo = gs_vertexbuffer_create(vb, GS_DYNAMIC);
-	gs_vertexbuffer_flush(vbo);
-	gs_load_vertexbuffer(vbo);
-	gs_load_indexbuffer(NULL);
+	gs_blend_state_push();
+	gs_enable_blending(false);
+	// gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 
-	gs_draw(GS_TRIS, 0, 0);
+	gs_enable_depth_test(afd->depthTest);
+	gs_depth_function((gs_depth_test)afd->depthFunction);
 
-	gs_vertexbuffer_destroy(vbo);
+	gs_cull_mode previous_cull_mode = gs_get_cull_mode();
+	gs_set_cull_mode((gs_cull_mode)afd->cullMode);
+
+	gs_enable_stencil_test(afd->stencilTest);
+	gs_enable_stencil_write(afd->stencilWrite);
+	gs_stencil_function((gs_stencil_side)afd->stencilFunction,
+			    (gs_depth_test)afd->stencilDepthFunction);
+	gs_stencil_op((gs_stencil_side)afd->stencilOpSide,
+		      (gs_stencil_op_type)afd->stencilOpFail,
+		      (gs_stencil_op_type)afd->stencilOpDepthFail,
+		      (gs_stencil_op_type)afd->stencilOpPass);
+
+	const bool previous_fb_enabled = gs_framebuffer_srgb_enabled();
+	gs_enable_framebuffer_srgb(true);
 
 	gs_matrix_identity();
 
-	gs_texrender_end(afd->texrender);
+	vec3 LightColor;
+	vec3_set(&LightColor, 1.0f, 1.0f, 1.0f); // White light
+
+	// add matrices to the effect
+	gs_effect_set_matrix4(gs_effect_get_param_by_name(afd->effect,
+							  "ViewProj"),
+			      &afd->projectionMatrix);
+	gs_effect_set_matrix4(gs_effect_get_param_by_name(afd->effect,
+							  "WorldViewProj"),
+			      &afd->worldViewProjMatrix);
+	gs_effect_set_matrix4(gs_effect_get_param_by_name(afd->effect,
+							  "ModelMatrix"),
+			      &afd->modelMatrix);
+	gs_effect_set_matrix4(gs_effect_get_param_by_name(afd->effect,
+							  "NormalMatrix"),
+			      &afd->normalMatrix);
+	gs_effect_set_vec3(gs_effect_get_param_by_name(afd->effect,
+						       "LightPosition"),
+			   &afd->lightPosition);
+	gs_effect_set_vec3(gs_effect_get_param_by_name(afd->effect,
+						       "LightColor"),
+			   &LightColor);
+	gs_effect_set_float(gs_effect_get_param_by_name(afd->effect,
+							"depthFactor"),
+			    afd->depthFactor);
+	gs_effect_set_float(gs_effect_get_param_by_name(afd->effect,
+							"depthBias"),
+			    afd->depthBias);
+
+	struct vec4 background;
+	vec4_zero(&background);
+	gs_clear(afd->clearMode, &background, afd->depthClear,
+		 (uint8_t)afd->stencilClear);
+
+	gs_render_start(true);
+	drawAssimpAsset(afd->asset, obs_to_glm(afd->modelMatrix));
+	afd->vbo = gs_render_save();
+
+	gs_load_vertexbuffer(afd->vbo);
+
+	while (gs_effect_loop(afd->effect, "Draw")) {
+		gs_draw(GS_TRIS, 0, 0);
+	}
+
+	gs_render_stop(GS_TRIS);
+
 	gs_blend_state_pop();
-	gs_matrix_pop();
-	gs_viewport_pop();
+	gs_set_cull_mode(previous_cull_mode);
+	gs_enable_framebuffer_srgb(previous_fb_enabled);
+	gs_end_scene();
+	gs_texrender_end(afd->texrender);
+
+	gs_enable_depth_test(false);
 
 	return true;
 }

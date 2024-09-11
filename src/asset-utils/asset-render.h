@@ -3,6 +3,7 @@
 
 #include "augmented-filter-data.h"
 
-bool render_asset_3d(augmented_filter_data *afd, const aiScene *scene);
+bool render_asset_3d(augmented_filter_data *afd);
+void drawAssimpMesh(const aiMesh *mesh, augmented_filter_data *afd);
 
 #endif /* ASSET_RENDER_H */
