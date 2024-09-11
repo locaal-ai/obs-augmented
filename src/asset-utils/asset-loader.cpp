@@ -6,6 +6,9 @@
 
 #include <obs.h>
 
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+
 #include "plugin-support.h"
 
 // Function to calculate the bounding box of the scene
@@ -69,7 +72,7 @@ void adjustVertexOrder(aiMesh *mesh)
 	}
 }
 
-const aiScene *load_asset(const char *path)
+const aiScene *load_asset(const char *path, const bool flipFaces)
 {
 	// Load asset from path using Assimp
 	const aiScene *scene_in =
@@ -82,11 +85,12 @@ const aiScene *load_asset(const char *path)
 	// Rescale the scene to fit within a normalized size
 	rescaleScene(scene);
 
-	// adjust the vertex order
-	// for (unsigned int i = 0; i < scene->mNumMeshes; ++i)
-	// {
-	// 	adjustVertexOrder(scene->mMeshes[i]);
-	// }
+	if (flipFaces) {
+		// adjust the vertex order
+		for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
+			adjustVertexOrder(scene->mMeshes[i]);
+		}
+	}
 
 	if (!scene) {
 		obs_log(LOG_ERROR, "Failed to load asset: %s\n",
@@ -118,8 +122,22 @@ const aiScene *load_asset(const char *path)
 	// print texture info
 	for (unsigned int i = 0; i < scene->mNumTextures; i++) {
 		aiTexture *texture = scene->mTextures[i];
-		obs_log(LOG_INFO, "Texture %d: %s", i,
+		obs_log(LOG_INFO, "Texture %d filename: %s", i,
 			texture->mFilename.C_Str());
+		obs_log(LOG_INFO, "Texture %d width: %d", i, texture->mWidth);
+		obs_log(LOG_INFO, "Texture %d height: %d", i, texture->mHeight);
+		obs_log(LOG_INFO, "Texture %d height: %s", i,
+			texture->achFormatHint);
+		if (texture->CheckFormat("jpg")) {
+			obs_log(LOG_INFO, "Texture %d is a jpg", i);
+			// load the texture from tex->pcData raw data buffer
+			cv::Mat textureImage =
+				cv::imdecode(cv::Mat(1, texture->mWidth,
+						     CV_8UC1, texture->pcData),
+					     cv::IMREAD_UNCHANGED);
+			obs_log(LOG_INFO, "Texture %d image size: %d x %d", i,
+				textureImage.cols, textureImage.rows);
+		}
 	}
 
 	return scene;

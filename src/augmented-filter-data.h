@@ -26,6 +26,7 @@ struct augmented_filter_data {
 	gs_vertbuffer_t *vbo;
 
 	std::string assetPath;
+	bool flipFaces;
 	const aiScene *asset;
 	matrix4 modelMatrix;
 	matrix4 viewMatrix;

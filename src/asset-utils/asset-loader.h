@@ -3,6 +3,6 @@
 
 #include <assimp/scene.h>
 
-const aiScene *load_asset(const char *path);
+const aiScene *load_asset(const char *path, const bool flipFaces);
 
 #endif /* ASSET_LOADER_H */

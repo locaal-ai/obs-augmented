@@ -71,11 +71,14 @@ if(MSVC)
     INTERFACE ${opencv_SOURCE_DIR}/x64/vc17/staticlib/opencv_imgproc490.lib
               ${opencv_SOURCE_DIR}/x64/vc17/staticlib/opencv_core490.lib
               ${opencv_SOURCE_DIR}/x64/vc17/staticlib/opencv_video490.lib
+              ${opencv_SOURCE_DIR}/x64/vc17/staticlib/opencv_imgcodecs490.lib
               ${opencv_SOURCE_DIR}/x64/vc17/staticlib/zlib.lib)
   target_include_directories(OpenCV SYSTEM INTERFACE ${opencv_SOURCE_DIR}/include)
 else()
   target_link_libraries(
-    OpenCV INTERFACE ${opencv_SOURCE_DIR}/lib/libopencv_imgproc.a ${opencv_SOURCE_DIR}/lib/libopencv_core.a
-                     ${opencv_SOURCE_DIR}/lib/libopencv_video.a ${opencv_SOURCE_DIR}/lib/opencv4/3rdparty/libzlib.a)
+    OpenCV
+    INTERFACE ${opencv_SOURCE_DIR}/lib/libopencv_imgproc.a ${opencv_SOURCE_DIR}/lib/libopencv_core.a
+              ${opencv_SOURCE_DIR}/lib/libopencv_video.a ${opencv_SOURCE_DIR}/lib/opencv4/3rdparty/libzlib.a
+              ${opencv_SOURCE_DIR}/lib/libopencv_imgcodecs.a)
   target_include_directories(OpenCV SYSTEM INTERFACE ${opencv_SOURCE_DIR}/include/opencv4)
 endif()

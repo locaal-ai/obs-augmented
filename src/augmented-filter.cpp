@@ -27,15 +27,18 @@ void update_from_settings(augmented_filter_data *afd, obs_data_t *s)
 {
 	// get file path of the built in asset
 	const char *assetPathFromSettings = obs_data_get_string(s, "asset");
-	if (afd->assetPath != assetPathFromSettings) {
+	const bool flipFaces = obs_data_get_bool(s, "flip_faces");
+	if (afd->assetPath != assetPathFromSettings ||
+	    afd->flipFaces != flipFaces) {
 		afd->assetPath = assetPathFromSettings;
+		afd->flipFaces = flipFaces;
 		char *assetPath = obs_module_file(assetPathFromSettings);
 		if (!assetPath) {
 			obs_log(LOG_ERROR, "Failed to get asset path");
 			afd->isDisabled = true;
 			return;
 		}
-		afd->asset = load_asset(assetPath);
+		afd->asset = load_asset(assetPath, flipFaces);
 		bfree(assetPath);
 		if (!afd->asset) {
 			obs_log(LOG_ERROR, "Failed to load asset: %s",
@@ -193,6 +196,7 @@ void augmented_filter_deactivate(void *data)
 void augmented_filter_defaults(obs_data_t *s)
 {
 	obs_data_set_default_string(s, "asset", "assets/crown.dae");
+	obs_data_set_default_bool(s, "flip_faces", false);
 	obs_data_set_default_double(s, "rotation", 0.0);
 	obs_data_set_default_double(s, "x", 0.0);
 	obs_data_set_default_double(s, "y", 0.0);
@@ -244,43 +248,57 @@ obs_properties_t *augmented_filter_properties(void *data)
 				     "assets/Crown_04_v1dot4_PBRref.dae");
 	obs_property_list_add_string(asset_list, "Crown_05_blend",
 				     "assets/Crown_05_blend.dae");
+	obs_property_list_add_string(asset_list, "chub_v2_01_baked",
+				     "assets/chub_v2_01_baked.dae");
+
+	// add boolean option for flipping the faces
+	obs_properties_add_bool(props, "flip_faces", "Flip Faces");
+
+	// add group for object presentation settings
+	obs_properties_t *object = obs_properties_create();
+	obs_properties_add_group(props, "object", "Object Settings",
+				 OBS_GROUP_NORMAL, object);
 
 	// add slider for rotation
-	obs_properties_add_float_slider(props, "rotation", "Rotation", -180.0,
+	obs_properties_add_float_slider(object, "rotation", "Rotation", -180.0,
 					180.0, 0.1);
 	// add slider for x position
-	obs_properties_add_float_slider(props, "x", "X Position", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "x", "X Position", -5.0, 5.0,
 					0.01);
 	// add slider for y position
-	obs_properties_add_float_slider(props, "y", "Y Position", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "y", "Y Position", -5.0, 5.0,
 					0.01);
 	// add slider for z position
-	obs_properties_add_float_slider(props, "z", "Z Position", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "z", "Z Position", -5.0, 5.0,
 					0.01);
 	// add slider for scale
-	obs_properties_add_float_slider(props, "scale", "Scale", 0.0, 2.0,
+	obs_properties_add_float_slider(object, "scale", "Scale", 0.0, 2.0,
 					0.01);
 	// add slider for field of view angle
-	obs_properties_add_float_slider(props, "fov", "Field of View", 0.0,
+	obs_properties_add_float_slider(object, "fov", "Field of View", 0.0,
 					180.0, 0.1);
 	// add a checkbox for auto rotate
-	obs_properties_add_bool(props, "auto_rotate", "Auto Rotate");
+	obs_properties_add_bool(object, "auto_rotate", "Auto Rotate");
 
 	// add a slider for light position x
-	obs_properties_add_float_slider(props, "light_x", "Light X", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "light_x", "Light X", -5.0, 5.0,
 					0.01);
 	// add a slider for light position y
-	obs_properties_add_float_slider(props, "light_y", "Light Y", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "light_y", "Light Y", -5.0, 5.0,
 					0.01);
 	// add a slider for light position z
-	obs_properties_add_float_slider(props, "light_z", "Light Z", -5.0, 5.0,
+	obs_properties_add_float_slider(object, "light_z", "Light Z", -5.0, 5.0,
 					0.01);
 
+	// add group for rendering settings
+	obs_properties_t *rendering = obs_properties_create();
+	obs_properties_add_group(props, "rendering", "Rendering Settings",
+				 OBS_GROUP_NORMAL, rendering);
+
 	// add a selection for gs_depth_function
-	obs_property_t *list = obs_properties_add_list(props, "depth_function",
-						       "Depth Function",
-						       OBS_COMBO_TYPE_LIST,
-						       OBS_COMBO_FORMAT_INT);
+	obs_property_t *list = obs_properties_add_list(
+		rendering, "depth_function", "Depth Function",
+		OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Never", GS_NEVER);
 	obs_property_list_add_int(list, "Less", GS_LESS);
 	obs_property_list_add_int(list, "Equal", GS_EQUAL);
@@ -290,27 +308,27 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "GreaterEqual", GS_GEQUAL);
 	obs_property_list_add_int(list, "Always", GS_ALWAYS);
 	// add a selection for gs_set_cull_mode
-	list = obs_properties_add_list(props, "cull_mode", "Cull Mode",
+	list = obs_properties_add_list(rendering, "cull_mode", "Cull Mode",
 				       OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "None", GS_NEITHER);
 	obs_property_list_add_int(list, "Front", GS_FRONT);
 	obs_property_list_add_int(list, "Back", GS_BACK);
 	// add checkbos for depth test
-	obs_properties_add_bool(props, "depth_test", "Depth Test");
+	obs_properties_add_bool(rendering, "depth_test", "Depth Test");
 	// add checkbos for stencil test
-	obs_properties_add_bool(props, "stencil_test", "Stencil Test");
+	obs_properties_add_bool(rendering, "stencil_test", "Stencil Test");
 	// add checkbos for stencil write
-	obs_properties_add_bool(props, "stencil_write", "Stencil Write");
+	obs_properties_add_bool(rendering, "stencil_write", "Stencil Write");
 	// add a selection for gs_stencil_function
-	list = obs_properties_add_list(props, "stencil_function",
+	list = obs_properties_add_list(rendering, "stencil_function",
 				       "Stencil Function", OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Both", GS_STENCIL_BOTH);
 	obs_property_list_add_int(list, "Front", GS_STENCIL_FRONT);
 	obs_property_list_add_int(list, "Back", GS_STENCIL_BACK);
 	// add selectino for clear mode
-	list = obs_properties_add_list(props, "clear_mode", "Clear Mode",
+	list = obs_properties_add_list(rendering, "clear_mode", "Clear Mode",
 				       OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Color", GS_CLEAR_COLOR);
@@ -326,7 +344,7 @@ obs_properties_t *augmented_filter_properties(void *data)
 				  GS_CLEAR_COLOR | GS_CLEAR_DEPTH |
 					  GS_CLEAR_STENCIL);
 	// add selection for stencil function depth test
-	list = obs_properties_add_list(props, "stencil_function_depth_test",
+	list = obs_properties_add_list(rendering, "stencil_function_depth_test",
 				       "Stencil Function", OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Never", GS_NEVER);
@@ -338,14 +356,14 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "GreaterEqual", GS_GEQUAL);
 	obs_property_list_add_int(list, "Always", GS_ALWAYS);
 	// add selection for stencil op side
-	list = obs_properties_add_list(props, "stencil_op_side",
+	list = obs_properties_add_list(rendering, "stencil_op_side",
 				       "Stencil Op Side", OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Front", GS_STENCIL_FRONT);
 	obs_property_list_add_int(list, "Back", GS_STENCIL_BACK);
 	obs_property_list_add_int(list, "Both", GS_STENCIL_BOTH);
 	// add selection stencil op fail
-	list = obs_properties_add_list(props, "stencil_op_fail",
+	list = obs_properties_add_list(rendering, "stencil_op_fail",
 				       "Stencil Op Fail", OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Keep", GS_KEEP);
@@ -355,7 +373,7 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "Decrement", GS_DECR);
 	obs_property_list_add_int(list, "Invert", GS_INVERT);
 	// add selection stencil op z fail
-	list = obs_properties_add_list(props, "stencil_op_z_fail",
+	list = obs_properties_add_list(rendering, "stencil_op_z_fail",
 				       "Stencil Op Depth Fail",
 				       OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
@@ -366,7 +384,7 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "Decrement", GS_DECR);
 	obs_property_list_add_int(list, "Invert", GS_INVERT);
 	// add selection stencil op z fail
-	list = obs_properties_add_list(props, "stencil_op_pass",
+	list = obs_properties_add_list(rendering, "stencil_op_pass",
 				       "Stencil Op Pass", OBS_COMBO_TYPE_LIST,
 				       OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(list, "Keep", GS_KEEP);
@@ -376,18 +394,18 @@ obs_properties_t *augmented_filter_properties(void *data)
 	obs_property_list_add_int(list, "Decrement", GS_DECR);
 	obs_property_list_add_int(list, "Invert", GS_INVERT);
 	// add slider for stencil clear value
-	obs_properties_add_int_slider(props, "stencil_clear", "Stencil Clear",
-				      0, 255, 1);
+	obs_properties_add_int_slider(rendering, "stencil_clear",
+				      "Stencil Clear", 0, 255, 1);
 
 	// add slider for depth clear value
-	obs_properties_add_float_slider(props, "depth_clear", "Depth Clear",
+	obs_properties_add_float_slider(rendering, "depth_clear", "Depth Clear",
 					-2.0, 2.0, 0.01);
 	// add slider for depth factor
-	obs_properties_add_float_slider(props, "depth_factor", "Depth Factor",
-					0.0, 10.0, 0.01);
+	obs_properties_add_float_slider(rendering, "depth_factor",
+					"Depth Factor", 0.0, 10.0, 0.01);
 	// add slider for depth bias
-	obs_properties_add_float_slider(props, "depth_bias", "Depth Bias", -1.0,
-					1.0, 0.01);
+	obs_properties_add_float_slider(rendering, "depth_bias", "Depth Bias",
+					-1.0, 1.0, 0.01);
 
 	return props;
 }
